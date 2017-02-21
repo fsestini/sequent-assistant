@@ -1,9 +1,14 @@
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
+
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
+{-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 
 module Formula where
 
@@ -40,13 +45,13 @@ type Formula a = RawFormula Zero a
 
 data Sequent a = S [Formula a] [Formula a] deriving (Eq)
 
-instance Show a => Show (Term a) where
-  show t = runReader (showTerm t) M.empty
+instance (Show a, Pretty a) => Show (Term a) where
+  show t = render $ runReader (pTerm t) M.empty
 
-instance (Show a, PickFresh a) => Show (Formula a) where
-  show f = runReader (showFormula f) M.empty
+instance (Show a, PickFresh a, Pretty a) => Show (Formula a) where
+  show f = render $ runReader (pFormula f) M.empty
 
-instance (Show a, PickFresh a) => Show (Sequent a) where
+instance (Show a, PickFresh a, Pretty a) => Show (Sequent a) where
   show (S fs1 fs2) = let f = join . intersperse ", " . map show
                      in f (reverse fs1) ++ " |- " ++ f fs2
 
@@ -57,56 +62,77 @@ instance PickFresh String where
   pickFresh strs = aux 0 strs
     where
       aux :: Int -> [String] -> String
-      aux i strs =
+      aux i strs' =
         let x = "x" ++ replicate i '\''
-        in if elem x strs
-             then aux (i + 1) strs
+        in if elem x strs'
+             then aux (i + 1) strs'
              else x
 
-showTerm :: Show a => RawTerm n a -> Reader (M.Map Int a) String
-showTerm (Free x) = return . show $ x
-showTerm (Func f xs) = do
-  strs <- mapM showTerm xs
-  return $ f ++ "(" ++ concat (intersperse ", " strs) ++ ")"
-showTerm (Bound n) = do
+class Pretty a where
+  pretty :: a -> Doc
+
+instance Pretty String where
+  pretty = text
+
+pTerm :: Pretty a => RawTerm n a -> Reader (M.Map Int a) Doc
+pTerm (Free x) = return . pretty $ x
+pTerm (Func f xs) = do
+  strs <- mapM pTerm xs
+  return $
+    text f <>
+    if null strs
+      then empty
+      else parens (hcat (punctuate comma strs))
+pTerm (Bound n) = do
   env <- ask
   case M.lookup (toInt n) env of
     Nothing -> error "error in showTerm"
-    Just x -> return . show $ x
+    Just x -> return . pretty $ x
 
-showParens :: Reader a String -> Reader a String
-showParens r = do
-  rr <- r
-  return $ "(" ++ rr ++ ")"
+isAtomic :: RawFormula n a -> Bool
+isAtomic (Predicate _ _) = True
+isAtomic Top = True
+isAtomic Bottom = True
+isAtomic _ = False
 
-showFormula :: (Show a, PickFresh a) => RawFormula n a -> Reader (M.Map Int a) String
-showFormula (Term t) = showTerm t
-showFormula (Conj f1 f2) = do
-  sf1 <- showParens $ showFormula f1
-  sf2 <- showParens $ showFormula f2
-  return $ sf1 ++ " /\\ " ++ sf2
-showFormula (Disj f1 f2) = do
-  sf1 <- showParens $ showFormula f1
-  sf2 <- showParens $ showFormula f2
-  return $ sf1 ++ " \\/ " ++ sf2
-showFormula (Impl f1 f2) = do
-  sf1 <- showParens $ showFormula f1
-  sf2 <- showParens $ showFormula f2
-  return $ sf1 ++ " -> " ++ sf2
-showFormula (Equality t1 t2) = do
-  st1 <- showTerm t1
-  st2 <- showTerm t2
-  return $ st1 ++ " = " ++ st2
-showFormula (Not f) = (++) "not " <$> showFormula f
-showFormula Top = return "Top"
-showFormula Bottom = return "_|_"
-showFormula (Forall f) = do
+pFormulaMaybeParens :: _ => RawFormula n a -> Reader (M.Map Int a) Doc
+pFormulaMaybeParens f = if not (isAtomic f)
+                           then parens <$> (pFormula f)
+                           else pFormula f
+
+pFormula :: (Pretty a, PickFresh a) => RawFormula n a -> Reader (M.Map Int a) Doc
+pFormula (Predicate ident terms) =
+  fmap
+    (pretty ident <>)
+    (if null terms
+       then return empty
+       else parens . hcat . punctuate comma <$> mapM pTerm terms)
+pFormula (Conj f1 f2) = do
+  sf1 <- pFormulaMaybeParens f1
+  sf2 <- pFormulaMaybeParens f2
+  return $ hsep [sf1, text "∧", sf2]
+pFormula (Disj f1 f2) = do
+  sf1 <- pFormulaMaybeParens f1
+  sf2 <- pFormulaMaybeParens f2
+  return $ hsep [sf1, text "∨", sf2]
+pFormula (Impl f1 f2) = do
+  sf1 <- pFormulaMaybeParens f1
+  sf2 <- pFormulaMaybeParens f2
+  return $ hsep [sf1, text "→", sf2]
+pFormula (Equality t1 t2) = do
+  st1 <- pTerm t1
+  st2 <- pTerm t2
+  return $ hsep [st1, text "=", st2]
+pFormula (Not f) = (text "¬" <+>) <$> pFormula f
+pFormula (Forall f) = do
   env <- ask
   let newV = pickFresh . M.elems $ env
-  res <- showParens $ local (M.insert 0 newV . M.mapKeys (+1)) (showFormula f)
-  return $ "forall " ++ show newV ++ " " ++ res
-showFormula (Exists f) = do
+  res <- local (M.insert 0 newV . M.mapKeys (+ 1)) (pFormulaMaybeParens f)
+  return $ hsep [text "∀", pretty newV, res]
+pFormula (Exists f) = do
   env <- ask
   let newV = pickFresh . M.elems $ env
-  res <- showParens $ local (M.insert 0 newV . M.mapKeys (+1)) (showFormula f)
-  return $ "exists " ++ show newV ++ " " ++ res 
+  res <- local (M.insert 0 newV . M.mapKeys (+ 1)) (pFormulaMaybeParens f)
+  return $ hsep [text "∃", pretty newV, res]
+pFormula Bottom = return . text $ "⊥"
+pFormula Top = return . text $ "⊤"
