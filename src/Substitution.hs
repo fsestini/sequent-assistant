@@ -26,7 +26,8 @@ bindTerm n y (Free x) | x == y = Bound (maxOf n)
                                | otherwise = Free x
 
 bindFormula' :: Eq a => SNat n -> a -> RawFormula n a -> RawFormula (Succ n) a
-bindFormula' n x (Term t) = Term (bindTerm n x t)
+bindFormula' n x (Predicate ident terms) =
+  Predicate ident (map (bindTerm n x) terms)
 bindFormula' n x (Conj f1 f2) = bindFormula' n x f1 `Conj` bindFormula' n x f2
 bindFormula' n x (Disj f1 f2) = bindFormula' n x f1 `Disj` bindFormula' n x f2
 bindFormula' n x (Impl f1 f2) = bindFormula' n x f1 `Impl` bindFormula' n x f2
@@ -57,7 +58,8 @@ instantiateTerm n x (Bound fin) = case thick n (maxOf n) fin of
                                     Just fin' -> Bound fin'
 
 instantiateFormula :: SNat n -> a -> RawFormula (Succ n) a -> RawFormula n a
-instantiateFormula n x (Term t) = Term $ instantiateTerm n x t
+instantiateFormula n x (Predicate ident terms) =
+  Predicate ident (map (instantiateTerm n x) terms)
 instantiateFormula n x (Conj f1 f2) =
   Conj (instantiateFormula n x f1) (instantiateFormula n x f2)
 instantiateFormula n x (Disj f1 f2) =
@@ -85,7 +87,8 @@ substInTerm' f (Func name ts) = Func name $ map (substInTerm' f) ts
 substInTerm' f t = f t
 
 substFormula' :: (forall m . RawTerm m a -> RawTerm m a) -> RawFormula n a -> RawFormula n a
-substFormula' f (Term t) = Term . substInTerm' f $ t
+substFormula' f (Predicate ident terms) =
+  Predicate ident (map (substInTerm' f) terms)
 substFormula' f (Conj f1 f2) = substFormula' f f1 `Conj` substFormula' f f2
 substFormula' f (Disj f1 f2) = substFormula' f f1 `Disj` substFormula' f f2
 substFormula' f (Impl f1 f2) = substFormula' f f1 `Impl` substFormula' f f2
@@ -126,7 +129,8 @@ termFreeVars (Func _ ts) = foldr S.union S.empty (map termFreeVars ts)
 termFreeVars (Bound _) = S.empty
 
 freeVars :: Ord a => RawFormula n a -> S.Set a
-freeVars (Term t) = termFreeVars t
+freeVars (Predicate ident terms) =
+  foldr S.union S.empty (map termFreeVars terms)
 freeVars (Conj f1 f2) = freeVars f1 `S.union` freeVars f2
 freeVars (Disj f1 f2) = freeVars f1 `S.union` freeVars f2
 freeVars (Impl f1 f2) = freeVars f1 `S.union` freeVars f2

@@ -79,7 +79,8 @@ atom :: Parser (Formula String)
 atom  =  parens expr
      <|> (reserved "true" >> return Top)
      <|> (reserved "false" >> return Bottom)
-     <|> Term <$> parseTerm
+     <|> Predicate <$> identifier
+                   <*> (try (parens (sepBy1 parseTerm comma)) <|> return [])
 
 parseTerm :: Parser (Term String) 
 parseTerm = do

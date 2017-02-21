@@ -23,7 +23,7 @@ deriving instance Eq a => Eq (RawTerm n a)
 type Term a = RawTerm Zero a
 
 data RawFormula :: Nat -> * -> * where
-  Term :: RawTerm n a -> RawFormula n a
+  Predicate :: a -> [RawTerm n a] -> RawFormula n a
   Conj :: RawFormula n a -> RawFormula n a -> RawFormula n a
   Disj :: RawFormula n a -> RawFormula n a -> RawFormula n a
   Impl :: RawFormula n a -> RawFormula n a -> RawFormula n a
