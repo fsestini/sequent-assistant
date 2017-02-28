@@ -12,7 +12,7 @@
 
 module Substitution where
 
-import qualified Data.Set as S
+--import Debug.Trace
 import Fin
 import Formula
 
@@ -82,13 +82,13 @@ instantiate _ _ = error "cannot instantiateFormula non-quantifier"
 --------------------------------------------------------------------------------
 -- Substitution
 
-substInTerm' :: (forall m . RawTerm m a -> RawTerm m a) -> RawTerm n a -> RawTerm n a
-substInTerm' f (Func name ts) = Func name $ map (substInTerm' f) ts
-substInTerm' f t = f t
+-- substInTerm' :: (forall m . RawTerm m a -> RawTerm m a) -> RawTerm n a -> RawTerm n a
+-- substInTerm' f (Func name ts) = Func name $ map (substInTerm' f) ts
+-- substInTerm' f t = f t
 
 substFormula' :: (forall m . RawTerm m a -> RawTerm m a) -> RawFormula n a -> RawFormula n a
 substFormula' f (Predicate ident terms) =
-  Predicate ident (map (substInTerm' f) terms)
+  Predicate ident (map f terms)
 substFormula' f (Conj f1 f2) = substFormula' f f1 `Conj` substFormula' f f2
 substFormula' f (Disj f1 f2) = substFormula' f f1 `Disj` substFormula' f f2
 substFormula' f (Impl f1 f2) = substFormula' f f1 `Impl` substFormula' f f2
@@ -96,50 +96,25 @@ substFormula' f (Not fr) = Not $ substFormula' f fr
 substFormula' f (Forall fr) = Forall $ substFormula' f fr
 substFormula' f (Exists fr) = Exists $ substFormula' f fr
 substFormula' f (Equality t1 t2) =
-  Equality (substInTerm' f t1) (substInTerm' f t2)
+  Equality (f t1) (f t2)
 substFormula' _ Top = Top
 substFormula' _ Bottom = Bottom
 
-substFormula :: (Term a -> Term a) -> Formula a -> Formula a
-substFormula f = substFormula' (raiseSubst f)
+substFormula :: (forall n . RawTerm n a -> RawTerm n a) -> Formula a -> Formula a
+substFormula f = substFormula' f
 
-simpleVarSub :: Eq a => a -> Term a -> Term a -> Term a
-simpleVarSub x t (Free y) | x == y = t
-                          | otherwise = Free y
-simpleVarSub _ _ t = t
+simpleVarSub :: Eq a => a -> Term a -> RawTerm n a -> RawTerm n a
+simpleVarSub x t = simpleTermSub (Free x) t
 
-simpleTermSub :: Eq a => Term a -> Term a -> Term a -> Term a
-simpleTermSub t t' s = if t == s then t' else s
+simpleTermSub :: Eq a => Term a -> Term a -> RawTerm n a -> RawTerm n a
+simpleTermSub t1 t2 s
+  | (raiseTerm t1) == s = (raiseTerm t2)
+  | otherwise =
+    case s of
+      Func name ts -> Func name (map (simpleTermSub t1 t2) ts)
+      _ -> s
 
 raiseTerm :: Term a -> RawTerm n a
 raiseTerm (Free x) = Free x
 raiseTerm (Func name ts) = Func name (map raiseTerm ts)
 
-raiseSubst :: (Term a -> Term a) -> RawTerm n a -> RawTerm n a
-raiseSubst _ t@(Bound _) = t
-raiseSubst f (Free x) = raiseTerm $ f (Free x)
-raiseSubst f (Func name ts) = Func name (map (raiseSubst f) ts)
-
---------------------------------------------------------------------------------
--- Free vars
-
-termFreeVars :: Ord a => RawTerm n a -> S.Set a
-termFreeVars (Free x) = S.singleton x
-termFreeVars (Func _ ts) = foldr S.union S.empty (map termFreeVars ts)
-termFreeVars (Bound _) = S.empty
-
-freeVars :: Ord a => RawFormula n a -> S.Set a
-freeVars (Predicate ident terms) =
-  foldr S.union S.empty (map termFreeVars terms)
-freeVars (Conj f1 f2) = freeVars f1 `S.union` freeVars f2
-freeVars (Disj f1 f2) = freeVars f1 `S.union` freeVars f2
-freeVars (Impl f1 f2) = freeVars f1 `S.union` freeVars f2
-freeVars (Not fr) = freeVars fr
-freeVars (Forall fr) = freeVars fr
-freeVars (Exists fr) = freeVars fr
-freeVars (Equality t1 t2) = termFreeVars t1 `S.union` termFreeVars t2
-freeVars Top = S.empty
-freeVars Bottom = S.empty
-
-sequentFreeVars :: Ord a => Sequent a -> S.Set a
-sequentFreeVars (S fs1 fs2) = foldr S.union S.empty (map freeVars (fs1 ++ fs2))
