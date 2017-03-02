@@ -15,14 +15,18 @@ import Control.Monad.Morph
 import Control.Monad.Identity
 import Commands
 import Parser
+import Control.Monad.Reader
 
 type ProofTree a = Tree (Sequent a)
-type Proof a b = MaybeT (State (Location (Sequent a))) b
 
-type ProofIO a b = MaybeT (StateT (Location (Sequent a)) IO) b
+type ProofT a m b = MaybeT (StateT (Location (Sequent a)) (ReaderT (Theory a, Logic) m)) b
+type ProofIO a b = ProofT a IO b
+type Proof a b = ProofT a Identity b
+
+type Prover a b = ReaderT (Theory a, Logic) IO b
 
 liftProof :: Proof a b -> ProofIO a b
-liftProof = hoist (hoist (return . runIdentity))
+liftProof = hoist (hoist (hoist (return . runIdentity)))
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . return
@@ -31,6 +35,7 @@ nextSequent :: Eq a => Proof a (Sequent a)
 nextSequent = do
   loc <- get
   newLoc <- liftMaybe $ searchTree loc test
+  put newLoc
   let seq = label newLoc
   return seq
   where
@@ -44,17 +49,18 @@ addGoals seqs = do
   where
     trans t = Node (rootLabel t) (map (flip Node []) seqs)
 
-getCommand :: ProofIO a (Command String)
+getCommand :: ProofIO String (ProofCommand String)
 getCommand = do
   line <- liftIO getLine
-  case parseCommand line of
+  theory <- lift (fmap fst ask)
+  case parseProofCommand theory line of
     Left err ->
       (liftIO $
       putStrLn ("error: " ++ (show err)) >> putStr "Enter command: " >>
       hFlush stdout) >> getCommand
     Right comm -> return comm
 
-getRule :: (Eq a, Ord a, PickFresh a) => Command a -> Rule a
+getRule :: (Eq a, Ord a, PickFresh a) => ProofCommand a -> Rule a
 getRule IdAxiom = identity
 getRule AndLeft = andLeft
 getRule AndRight = andRight
@@ -70,6 +76,8 @@ getRule ExistsLeft = existsLeft
 getRule (ExistsRight term) = existsRight term
 getRule (ExchangeLeft i) = exchangeLeft i
 getRule (ExchangeRight i) = exchangeRight i
+getRule (EqualityLeft i) = equalityLeft i
+getRule (EqualityRight i) = equalityRight i
 
 liftRule :: Rule a -> Sequent a -> ProofIO a ()
 liftRule r seq = do
@@ -79,27 +87,22 @@ liftRule r seq = do
 
 proofLoop :: _ => ProofIO String ()
 proofLoop = do
-  sequent <- liftProof nextSequent
-  liftIO . putStrLn $ "proving: " ++ show sequent
+  sequent@(S ante cons) <- liftProof nextSequent
+  liftIO $ do
+    putStrLn ""
+    forM_ ante (putStrLn . show)
+    putStrLn "--------------------------------------------------"
+    forM_ cons (putStrLn . show)
+    putStrLn ""
+    putStr "> "
+    hFlush stdout
   comm <- getCommand
   case comm of
     Print -> undefined
     Skip -> proofLoop
     _ -> liftRule (getRule comm) sequent >> proofLoop
 
-prove :: _ => Sequent String -> IO (ProofTree String)
-prove seq = do
-  x <- fmap snd $ runStateT (runMaybeT proofLoop) (start (Node seq []))
-  return $ end x
-  
-main :: IO ()
-main = do
-  putStr "Enter sequent: "
-  hFlush stdout
-  line <- getLine
-  case parseSequent line of
-    Left err -> putStrLn $ "Error: " ++ (show err)
-    Right seq -> do pt <- prove seq
-                    putStrLn "No more goals. Proof tree:"
-                    putStrLn . show $ pt
-                    main
+prove :: Sequent String -> Prover String (ProofTree String)
+prove sequent = do
+  loc <- fmap snd $ runStateT (runMaybeT proofLoop) (start (Node sequent []))
+  return . end $ loc
