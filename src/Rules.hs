@@ -32,18 +32,30 @@ liftRuleRight f (S ls (r : rs)) = do
 liftRuleRight _ _ = throwError "cannot apply right rule to empty succedent"
 
 isAxiom :: Eq a => Sequent a -> Bool
-isAxiom (S fs1 fs2) =
-  or $ map (uncurry (==)) mix
+isAxiom sequent = isIdAxiom sequent || isReflAxiom sequent
+
+isIdAxiom :: Eq a => Sequent a -> Bool
+isIdAxiom (S fs1 fs2) = or $ map (uncurry (==)) mix
   where
     mix = [(f1, f2) | f1 <- fs1, f2 <- fs2]
-    
+
+isReflAxiom :: Eq a => Sequent a -> Bool
+isReflAxiom (S _ fs) = any pred fs
+  where
+    pred (Equality t1 t2) = t1 == t2
+    pred _ = False
+
 identity :: Eq a => Sequent a -> ExceptS [Sequent a]
-identity (S fs1 fs2) =
-  if or $ map (uncurry (==)) mix
+identity sequent =
+  if isIdAxiom sequent
     then return []
     else throwError "no formulas unify"
-  where
-    mix = [(f1, f2) | f1 <- fs1, f2 <- fs2]
+
+reflexivity :: Eq a => Sequent a -> ExceptS [Sequent a]
+reflexivity sequent =
+  if isReflAxiom sequent
+    then return []
+    else throwError "reflexivity does not apply here"
 
 andLeft :: Sequent a -> ExceptS [Sequent a]
 andLeft = liftRuleLeft andLeft'
