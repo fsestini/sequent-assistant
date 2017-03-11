@@ -68,7 +68,7 @@ instantiateFormula n x (Impl f1 f2) =
   Impl (instantiateFormula n x f1) (instantiateFormula n x f2)
 instantiateFormula n x (Not f) = Not $ instantiateFormula n x f
 instantiateFormula n x (Forall f) = Forall $ instantiateFormula (SSucc n) x f
-instantiateFormula n x (Exists f) = Forall $ instantiateFormula (SSucc n) x f
+instantiateFormula n x (Exists f) = Exists $ instantiateFormula (SSucc n) x f
 instantiateFormula n x (Equality t1 t2) =
   Equality (instantiateTerm n x t1) (instantiateTerm n x t2)
 instantiateFormula _ _ Top = Top
