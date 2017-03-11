@@ -157,6 +157,16 @@ equalityRight i (S (Equality t1 t2:lfs) rfs) =
     asd = substFormula (simpleTermSub t1 t2)
 equalityRight _ _ = throwError "no left equality in position"
 
+cut :: Formula a -> [Int] -> [Int] -> Sequent a -> ExceptS [Sequent a]
+cut cutFormula leftAntecedents leftSubsequents (S lfs rfs) =
+  return [S la (cutFormula : ls), S (cutFormula : ra) rs]
+  where
+    f p = map snd . filter (p . fst) . zip [0 ..]
+    la = f (`elem` leftAntecedents) lfs
+    ls = f (`elem` leftSubsequents) rfs
+    ra = f (not . (`elem` leftAntecedents)) lfs
+    rs = f (not . (`elem` leftSubsequents)) rfs
+
 transform :: Eq a => Int -> (a -> a) -> [a] -> [a]
 transform i f fs =
   let mapped = map mapper (zip [0 ..] fs)
