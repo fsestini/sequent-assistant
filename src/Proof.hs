@@ -11,7 +11,7 @@ import Formula
 import Control.Monad.Trans.Maybe
 import Tree
 import Commands
-import Parser
+import Parser.Commands
 import Control.Monad.Reader
 
 type ProofTree a = Tree (Sequent a)
