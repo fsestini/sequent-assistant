@@ -15,8 +15,9 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Proof, Parser, Formula, Substitution, Tree, Rules, Fin
-                     , Commands, Prover, TeX
+  exposed-modules:     Proof, Parser.Base, Parser.Formula, Parser.Commands
+                     , Formula, Substitution, Tree, Rules, Fin
+                     , Commands, Prover, TeX, FromString
   build-depends:       base >= 4.7 && < 5, parsec, mtl, containers, rosezipper
                      , transformers, mmorph, pretty
   default-language:    Haskell2010
