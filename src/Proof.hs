@@ -16,14 +16,10 @@ import Control.Monad.Reader
 
 type ProofTree a = Tree (Sequent a)
 
-type ProofT a m b = MaybeT (StateT (Location (Sequent a)) (ReaderT (Theory a, Logic) m)) b
-type ProofIO a b = ProofT a IO b
-type Proof a b = ProofT a Identity b
+type ProofEnv a = Theory a
+type ProofT a m b = MaybeT (StateT (Location (Sequent a)) (ReaderT (ProofEnv a) m)) b
 
-type Prover a b = ReaderT (Theory a, Logic) IO b
-
-liftProof :: Proof a b -> ProofIO a b
-liftProof = hoist (hoist (hoist (return . runIdentity)))
+type Prover a b = ReaderT (ProofEnv a) IO b
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . return
