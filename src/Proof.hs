@@ -9,10 +9,7 @@ import Control.Monad.Except
 import Control.Monad.State
 import Formula
 import Control.Monad.Trans.Maybe
-import Data.Maybe
 import Tree
-import Control.Monad.Morph
-import Control.Monad.Identity
 import Commands
 import Parser
 import Control.Monad.Reader
