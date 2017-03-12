@@ -60,6 +60,7 @@ getCommand = do
 
 getRule :: (Eq a, Ord a, PickFresh a) => ProofCommand a -> Rule a
 getRule IdAxiom = identity
+getRule ReflAxiom = reflexivity
 getRule AndLeft = andLeft
 getRule AndRight = andRight
 getRule OrLeft = orLeft
@@ -76,6 +77,8 @@ getRule (ExchangeLeft i) = exchangeLeft i
 getRule (ExchangeRight i) = exchangeRight i
 getRule (EqualityLeft i) = equalityLeft i
 getRule (EqualityRight i) = equalityRight i
+getRule (Cut f la ls) = cut f la ls
+getRule _ = error "no rule"
 
 liftRule :: MonadIO m => Rule a -> Sequent a -> ProofT a m ()
 liftRule r sequent = do
