@@ -24,7 +24,10 @@ type Prover a b = ReaderT (ProofEnv a) IO b
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . return
 
-nextSequent :: Eq a => Proof a (Sequent a)
+getTheory :: Monad m => ProofT a m (Theory a)
+getTheory = lift ask
+
+nextSequent :: (Eq a, Monad m) => ProofT a m (Sequent a)
 nextSequent = do
   loc <- get
   newLoc <- liftMaybe $ searchTree loc test
@@ -35,17 +38,17 @@ nextSequent = do
     test t = (null . subForest) t && (not (isAxiom (rootLabel t)))
 
 -- Add sequents as premises of the current one.
-addGoals :: [Sequent a] -> Proof a ()
+addGoals :: Monad m => [Sequent a] -> ProofT a m ()
 addGoals seqs = do
   loc <- get
   put $ modifyTree trans loc
   where
     trans t = Node (rootLabel t) (map (flip Node []) seqs)
 
-getCommand :: ProofIO String (ProofCommand String)
+getCommand :: (MonadIO m) => ProofT String m (ProofCommand String)
 getCommand = do
   line <- liftIO getLine
-  theory <- lift (fmap fst ask)
+  theory <- getTheory
   case parseProofCommand theory line of
     Left err ->
       (liftIO $
@@ -72,15 +75,15 @@ getRule (ExchangeRight i) = exchangeRight i
 getRule (EqualityLeft i) = equalityLeft i
 getRule (EqualityRight i) = equalityRight i
 
-liftRule :: Rule a -> Sequent a -> ProofIO a ()
-liftRule r seq = do
-  case runExcept (r seq) of
+liftRule :: MonadIO m => Rule a -> Sequent a -> ProofT a m ()
+liftRule r sequent = do
+  case runExcept (r sequent) of
     Left err -> liftIO . putStrLn $ "error: " ++ err
-    Right newSequents -> liftProof $ addGoals newSequents
+    Right newSequents -> addGoals newSequents
 
-proofLoop :: _ => ProofIO String ()
+proofLoop :: _ => ProofT String m ()
 proofLoop = do
-  sequent@(S ante cons) <- liftProof nextSequent
+  sequent@(S ante cons) <- nextSequent
   liftIO $ do
     putStrLn ""
     forM_ ante (putStrLn . show)
