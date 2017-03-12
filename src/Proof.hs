@@ -1,5 +1,5 @@
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
+{-# OPTIONS_GHC -Wall -Wno-partial-type-signatures #-}
 
 module Proof where
 
