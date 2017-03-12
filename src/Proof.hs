@@ -50,10 +50,12 @@ getCommand = do
   line <- liftIO getLine
   theory <- getTheory
   case parseProofCommand theory line of
-    Left err ->
-      (liftIO $
-      putStrLn ("error: " ++ (show err)) >> putStr "Enter command: " >>
-      hFlush stdout) >> getCommand
+    Left err -> do
+      liftIO $ do
+        putStrLn ("error: " ++ (show err))
+        putStr "proof> "
+        hFlush stdout
+      getCommand
     Right comm -> return comm
 
 getRule :: (Eq a, Ord a, PickFresh a) => ProofCommand a -> Rule a
