@@ -95,7 +95,7 @@ proofLoop = do
     putStrLn "--------------------------------------------------"
     forM_ cons (putStrLn . show)
     putStrLn ""
-    putStr "> "
+    putStr "proof> "
     hFlush stdout
   comm <- getCommand
   case comm of
