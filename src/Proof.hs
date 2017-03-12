@@ -32,8 +32,8 @@ nextSequent = do
   loc <- get
   newLoc <- liftMaybe $ searchTree loc test
   put newLoc
-  let seq = label newLoc
-  return seq
+  let sequent = label newLoc
+  return sequent
   where
     test t = (null . subForest) t && (not (isAxiom (rootLabel t)))
 
